@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 
 <head>
     <meta charset="UTF-8">
@@ -28,6 +28,7 @@
     </header>
 
     <main class="main-content">
+        <p id="api-connection-status" role="status" style="padding:8px 4px;font-weight:600">Conectando con API…</p>
         <section class="top-dashboard-grid">
             <div class="kpi-grid">
                 <div class="kpi-card">
@@ -37,11 +38,18 @@
                         <p id="kpi-active-alerts">3</p>
                     </div>
                 </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon yellow"><i class="fa-solid fa-bolt"></i></div>
+                    <div class="kpi-info">
+                        <h3>Kit Solar / Energía</h3>
+                        <p>Dato ilustrativo: 98%</p>
+                    </div>
+                </div>
             </div>
             <div class="panel-box map-container-box">
                 <div class="map-header">
                     <h2><i class="fa-solid fa-map-location-dot"></i> Monitoreo Geográfico - Copahue</h2>
-                    <span class="badge-risk risk-bajo" id="map-api-badge"><i class="fa-solid fa-wind"></i> Copahue Live</span>
+                    <span class="badge-risk risk-bajo" id="map-api-badge"><i class="fa-solid fa-wind"></i> Mapa de referencia</span>
                 </div>
                 <div id="copahue-map" class="map-simulation"></div>
             </div>
@@ -63,6 +71,7 @@
         <section class="nodes-section">
             <div class="panel-box full-width">
                 <h2><i class="fa-solid fa-network-wired"></i> Estado de Nodos y Red de Telemetría</h2>
+                <p id="esp32-status" role="status">Consultando ESP32…</p><p style="font-size:.8rem;opacity:.75">Los nodos listados a continuación son datos de referencia, no telemetría real.</p>
                 <div class="nodes-grid" id="nodes-container">
                 </div>
             </div>
@@ -71,7 +80,7 @@
  
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>    
-    <script src="script.js?v=copahue_2"></script>
+    <script src="script.js?v=api_grupo5_1"></script>
 </body>
 
 </html>

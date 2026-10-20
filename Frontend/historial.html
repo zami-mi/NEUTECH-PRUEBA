@@ -1,15 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <link rel="stylesheet" href="style.css?v=modern_nature_1">
+    <link rel="stylesheet" href="style.css?v=nodes_responsive_fix">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <title>NEUTECH</title>
+    <title>NEUTECH - Historial de Eventos</title>
 </head>
 <body>
     <header class="top-navbar">
@@ -25,26 +24,27 @@
     </header>
 
     <main class="main-content">
+        <p id="api-connection-status" role="status" style="padding:8px 4px;font-weight:600">Conectando con API…</p>
         <section class="table-section">
             <div class="panel-box full-width">
                 <div class="table-header">
                     <h2><i class="fa-solid fa-list"></i> Registro de eventos y Alertas</h2>
-                    <button id="btn-clear" class="btn-secondary"><i class="fa-solid fa-trash"></i> Limpiar Historial</button>
+                    <button id="btn-clear" class="btn-secondary"><i class="fa-solid fa-rotate"></i> Actualizar historial</button>
                 </div>
                 <div class="table-responsive">
                     <table>
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Fecha y Hora</th>
-                                <th>Descripción</th>
+                                <th>Nivel</th>
+                                <th>Hora</th>
+                                <th>Evento</th>
                                 <th>Origen</th>
-                                <th>Nivel de Riesgo</th>
+                                <th>Difusión</th>
                                 <th>Estado</th>
-                                <th>Acciones</th>
+                                <th>Acción</th>
                             </tr>
                         </thead>
-                        <tbody id="alerts-table-body">
+                        <tbody id="history-table-body">
                         </tbody>
                     </table>
                 </div>
@@ -52,6 +52,6 @@
         </section>
     </main>
 
-    <script src="script.js?v=copahue_2"></script>
+    <script src="script.js?v=api_grupo5_1"></script>
 </body>
 </html>

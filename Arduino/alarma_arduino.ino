@@ -157,10 +157,13 @@ void controlarCicloAlarma(unsigned long ahora) {
 
 // ======================================================
 //  Protocolo serial
-//  Formato:  estado|nuevo|l1|l2|l1|l2|...\n
-//    estado: 0 = no critico, 1 = critico, 2 = solo mostrar texto (no toca la alarma)
-//    nuevo : 1 = es un registro critico que todavia no se habia informado
+//  Formato principal (posicional): estado|nuevo|l1|l2|l1|l2|...\n
+//    estado: 0 = no critico (apaga alarma), 1 = critico (enciende buzzer y leds), 2 = solo texto
+//    nuevo : 1 = activa/renueva ciclo critico de 20s, 0 = ciclo normal
 //    luego pares de lineas (max 16 caracteres c/u), una pareja por pantalla
+//
+//  Soporta ademas fallback automatico para formato con etiquetas:
+//    ID:...|LVL:critical|MSG:... o STATUS:OK|...
 // ======================================================
 char* siguienteCampo(char** cursor) {
     if (*cursor == NULL) return NULL;
@@ -176,40 +179,80 @@ char* siguienteCampo(char** cursor) {
 }
 
 void procesarLinea(char* msg) {
-    char* cursor = msg;
-    char* campoEstado = siguienteCampo(&cursor);
-    char* campoNuevo = siguienteCampo(&cursor);
-    if (!campoEstado || !campoNuevo) return;   // mensaje invalido, se ignora
-
-    int estado = atoi(campoEstado);
-    bool nuevo = (atoi(campoNuevo) == 1);
-    if (estado < 0 || estado > 2) return;
-
+    int estado = 0;
+    bool nuevo = false;
     uint8_t n = 0;
-    while (n < MAX_PANTALLAS) {
-        char* l1 = siguienteCampo(&cursor);
-        if (!l1) break;
-        char* l2 = siguienteCampo(&cursor);
-        copiarLinea(pantallas[n][0], l1);
-        copiarLinea(pantallas[n][1], l2 ? l2 : "");
-        n++;
-    }
-    if (n == 0) return;
 
-    totalPantallas = n;
+    // Compatibilidad retroactiva: Si el mensaje contiene etiquetas 'ID:' o 'STATUS:'
+    if (strncmp(msg, "ID:", 3) == 0 || strncmp(msg, "STATUS:", 7) == 0) {
+        if (strstr(msg, "LVL:critical") != NULL) {
+            estado = 1;
+            nuevo = true;
+            copiarLinea(pantallas[0][0], "ALERTA CRITICA");
+            copiarLinea(pantallas[0][1], "EVACUAR ZONA");
+            n = 1;
+        } else if (strstr(msg, "STATUS:OK") != NULL || strstr(msg, "STAT:resolved") != NULL) {
+            estado = 0;
+            nuevo = false;
+            copiarLinea(pantallas[0][0], "SISTEMA NORMAL");
+            copiarLinea(pantallas[0][1], "SIN ALERTAS");
+            n = 1;
+        } else {
+            estado = 2; // Solo texto / advertencia
+            nuevo = false;
+            copiarLinea(pantallas[0][0], "ALERTA ACTIVA");
+            copiarLinea(pantallas[0][1], "VER MONITOR");
+            n = 1;
+        }
+    } else {
+        // Protocolo posicional estándar: estado|nuevo|l1|l2|...
+        char* cursor = msg;
+        char* campoEstado = siguienteCampo(&cursor);
+        char* campoNuevo = siguienteCampo(&cursor);
+        if (!campoEstado || !campoNuevo) return;   // mensaje invalido
+
+        estado = atoi(campoEstado);
+        nuevo = (atoi(campoNuevo) == 1);
+        if (estado < 0 || estado > 2) return;
+
+        while (n < MAX_PANTALLAS) {
+            char* l1 = siguienteCampo(&cursor);
+            if (!l1) break;
+            char* l2 = siguienteCampo(&cursor);
+            copiarLinea(pantallas[n][0], l1);
+            copiarLinea(pantallas[n][1], l2 ? l2 : "");
+            n++;
+        }
+    }
+
+    if (n == 0) {
+        if (estado == 1) {
+            copiarLinea(pantallas[0][0], "ALERTA CRITICA");
+            copiarLinea(pantallas[0][1], "EVACUAR ZONA");
+            totalPantallas = 1;
+        } else {
+            copiarLinea(pantallas[0][0], "SISTEMA NORMAL");
+            copiarLinea(pantallas[0][1], "SIN ALERTAS");
+            totalPantallas = 1;
+        }
+    } else {
+        totalPantallas = n;
+    }
+
     if (nuevo || pantallaActual >= totalPantallas) pantallaActual = 0;
     tiempoPantalla = millis();
     dibujarPantalla();
 
     if (estado == 1) {
-        if (nuevo) {
-            if (!alarmaActiva) iniciarAlarma();
-            else nuevoCriticoEnCiclo = true;
+        if (!alarmaActiva) {
+            iniciarAlarma();
+        } else if (nuevo) {
+            nuevoCriticoEnCiclo = true;
         }
     } else if (estado == 0) {
         if (alarmaActiva) detenerAlarma();   // llego un dato no critico: se corta
     }
-    // estado 2: no se toca la alarma
+    // estado 2: no se toca la alarma sonora, solo se actualizo la pantalla
 }
 
 void leerSerial() {

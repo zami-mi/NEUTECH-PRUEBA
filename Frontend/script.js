@@ -49,112 +49,112 @@ const NODOS = [
     }
 ];
 
-const ALERTAS_INICIALES = [
-    {
-        id: 1,
-        time: '14:30:15',
-        isoDate: '2026-10-15T14:30:15.000Z',
-        title: 'Erupción inminente con pluma eruptiva',
-        source: 'Sensor cráter el agrio',
-        origin_type: 'simulated',
-        level: 'critical',
-        status: 'Pendiente',
-        channels: ['Sirena acústica', 'Baliza roja', 'SMS Defensa civil'],
-        metadata: {
-            alert_evaluated: true,
-            node_id: 'NODE-02',
-            trace_id: 'SIM-TRC-001'
-        }
-    },
-    {
-        id: 2,
-        time: '14:22:00',
-        isoDate: '2026-10-15T14:22:00.000Z',
-        title: 'Tremor armónico continuo y sismicidad en flanco este',
-        source: 'Estación sísmica OVDAS / SEGEMAR',
-        origin_type: 'simulated',
-        level: 'high',
-        status: 'Confirmado',
-        channels: ['Radio VHF', 'Aviso digital', 'Red caviahue'],
-        metadata: {
-            alert_evaluated: true,
-            node_id: 'NODE-03',
-            trace_id: 'SIM-TRC-002'
-        }
-    },
-    {
-        id: 3,
-        time: '14:15:42',
-        isoDate: '2026-10-15T14:15:42.000Z',
-        title: 'Lectura térmica anómala sin confirmación de sensor secundario',
-        source: 'Sensor térmico laguna cráter',
-        origin_type: 'test',
-        level: 'medium',
-        status: 'Pendiente',
-
-        channels: ['Telemetría Interna'],
-        metadata: {
-            alert_evaluated: false,
-            node_id: 'NODE-06',
-            trace_id: 'TEST-TRC-003'
-        }
-    },
-    {
-        id: 4,
-        time: '13:50:10',
-        isoDate: '2026-10-15T13:50:10.000Z',
-        title: 'Viento leve dirección NE sin afectación urbana',
-        source: 'Estación Meteorológica Caviahue',
-        origin_type: 'simulated',
-        level: 'low',
-        status: 'Atendido',
-        channels: ['Canal Meteo'],
-        metadata: {
-            alert_evaluated: true,
-            node_id: 'NODE-05',
-            trace_id: 'SIM-TRC-004'
-        }
-    },
-    {
-        id: 5,
-        time: '13:30:00',
-        isoDate: '2026-10-15T13:30:00.000Z',
-        title: 'Monitoreo rutinario fumarólico dentro de parámetros basales',
-        source: 'Sirena y Baliza Termas de Copahue',
-        origin_type: 'simulated',
-        level: 'normal',
-        status: 'Atendido',
-        channels: ['Reporte Diario'],
-        metadata: {
-            alert_evaluated: true,
-            node_id: 'NODE-01',
-            trace_id: 'SIM-TRC-005'
-        }
-    }
-];
-
-// Cargar alertas desde LocalStorage
+// API del Grupo 5. Si el frontend es servido por el backend, se usa el mismo origen.
+// Si se usa Live Server (puerto 5500/5501), consulta localhost:5000.
+const API = window.location.port === '5000' ? window.location.origin : 'http://localhost:5000';
+// Solo para pruebas locales: en producción NUNCA incluir secretos en JavaScript del navegador.
+const API_KEY = ''; // Coincide con Seguridad:ApiKey vacía en appsettings.json de esta demo.
+const HEADERS_API = API_KEY ? { 'X-API-Key': API_KEY } : {};
+const ESTADO_WEB = { active: 'Pendiente', active_confirmed: 'Confirmado', resolved: 'Atendido' };
 let alertsData = [];
-const localAlerts = localStorage.getItem('copahue_alerts_v2');
-if (localAlerts) {
-    try {
-        alertsData = JSON.parse(localAlerts);
-    } catch (e) {
-        alertsData = [...ALERTAS_INICIALES];
-    }
-} else {
-    alertsData = [...ALERTAS_INICIALES];
-}
+let apiConectada = false;
 
-// Limpiar cualquier prefijo [SIMULACIÓN] y sufijo >3000m residual guardado en el navegador
-alertsData = alertsData.map(alert => ({
-    ...alert,
-    title: String(alert.title || '')
-        .replace(/\[SIMULACI[ÓO]N\]\s*/gi, '')
-        .replace(/>\s*3000\s*m/gi, '')
-        .trim()
-}));
-localStorage.setItem('copahue_alerts_v2', JSON.stringify(alertsData));
+function escapeHTML(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function alertaDesdeAPI(reg, eventosPorId, confirmados) {
+    const d = reg.data || {};
+    const origenId = (d.related_record_ids || [])[0];
+    const origen = eventosPorId[origenId];
+    const estado = d.alert_status === 'active' && confirmados.has(d.alert_id) ? 'active_confirmed' : d.alert_status;
+    return {
+        id: String(d.alert_id || reg.record_id),
+        time: new Date(reg.timestamp).toLocaleTimeString('es-AR', { hour12: false }),
+        isoDate: reg.timestamp,
+        title: d.message || 'Alerta sin descripción',
+        source: origen?.subsystem || reg.subsystem || 'Grupo 5',
+        origin_type: reg.metadata?.source_type || 'simulated',
+        level: reg.alert_level,
+        status: ESTADO_WEB[estado] || 'Pendiente',
+        channels: d.channels || [],
+        metadata: {
+            alert_evaluated: reg.metadata?.alert_evaluated,
+            node_id: origen?.node_id || reg.node_id,
+            trace_id: origenId || reg.record_id
+        }
+    };
+}
+async function apiFetch(path, options = {}) {
+    const r = await fetch(`${API}${path}`, {
+        ...options,
+        headers: { ...HEADERS_API, ...(options.headers || {}) },
+        cache: 'no-store'
+    });
+    if (!r.ok) {
+        const detail = await r.text();
+        throw new Error(`HTTP ${r.status} en ${path}: ${detail.slice(0, 250)}`);
+    }
+    return r.json();
+}
+async function cargarAlertasDesdeAPI() {
+    const [alertas, eventos, registros] = await Promise.all([
+        apiFetch('/api/v1/alerts'),
+        apiFetch('/api/eventos'),
+        apiFetch('/api/v1/records?limit=200')
+    ]);
+    const eventosPorId = {};
+    for (const e of (eventos.items || [])) eventosPorId[e.record_id] = e;
+    const confirmados = new Set();
+    for (const reg of (registros.items || [])) {
+        if (reg.record_type === 'confirmation' && reg.data?.confirmation_type === 'device_execution' && reg.data?.result === 'success') {
+            confirmados.add(reg.data.alert_id);
+        }
+    }
+    const ultimos = new Map();
+    for (const reg of (alertas.items || [])) {
+        const id = reg.data?.alert_id;
+        if (!id) continue;
+        const previo = ultimos.get(id);
+        if (!previo || new Date(reg.timestamp) >= new Date(previo.timestamp)) ultimos.set(id, reg);
+    }
+    return [...ultimos.values()]
+        .map(reg => alertaDesdeAPI(reg, eventosPorId, confirmados))
+        .sort((a, b) => new Date(b.isoDate) - new Date(a.isoDate));
+}
+function mostrarEstadoConexion(ok, mensaje) {
+    const el = document.getElementById('api-connection-status');
+    if (el) { el.textContent = mensaje; el.style.color = ok ? '#15803d' : '#dc2626'; }
+}
+async function refrescarAlertas() {
+    try {
+        alertsData = await cargarAlertasDesdeAPI();
+        apiConectada = true;
+        mostrarEstadoConexion(true, '● API conectada · actualización automática');
+    } catch (e) {
+        apiConectada = false;
+        console.error('No se pudo conectar con la API:', e);
+        mostrarEstadoConexion(false, '● API desconectada · revisá el backend (puerto 5000)');
+        // No muestra datos ficticios como si fueran reales. Conserva solo las lecturas previas.
+    }
+    updateKPIs();
+    renderPriorityAlertsUI();
+    renderHistoryTableUI();
+    await refrescarEstadoESP32();
+}
+async function refrescarEstadoESP32() {
+    const el = document.getElementById('esp32-status');
+    if (!el) return;
+    try {
+        const r = await apiFetch('/api/v1/status');
+        const estado = r.items?.[0];
+        const online = estado?.status === 'active';
+        el.textContent = online ? 'ESP32 conectado' : 'ESP32 desconectado';
+        el.style.color = online ? '#15803d' : '#dc2626';
+    } catch {
+        el.textContent = 'Estado ESP32 no disponible';
+        el.style.color = '#dc2626';
+    }
+}
 
 function normalizeLevel(level) {
     const l = String(level ?? "").trim().toLowerCase();
@@ -229,7 +229,7 @@ function renderChannelsHTML(channels) {
         else if (lower.includes('radio') || lower.includes('vhf')) icon = 'fa-tower-broadcast';
         else if (lower.includes('sms') || lower.includes('push') || lower.includes('cel')) icon = 'fa-mobile-screen';
         else if (lower.includes('segemar') || lower.includes('defensa') || lower.includes('red')) icon = 'fa-shield-halved';
-        return `<span class="channel-tag"><i class="fa-solid ${icon}"></i> ${ch}</span>`;
+        return `<span class="channel-tag"><i class="fa-solid ${icon}"></i> ${escapeHTML(ch)}</span>`;
     }).join('')}
         </div>
     `;
@@ -296,9 +296,9 @@ function renderPriorityAlertsUI() {
                     ${renderRiskBadgeHTML(item.level, isEval)}
                     ${renderOriginBadgeHTML(item.origin_type)}
                 </div>
-                <h3>${cleanTitle}</h3>
+                <h3>${escapeHTML(cleanTitle)}</h3>
                 <div class="priority-card-meta">
-                    <span><i class="fa-solid fa-location-dot"></i> ${item.source}</span>
+                    <span><i class="fa-solid fa-location-dot"></i> ${escapeHTML(item.source)}</span>
                     <span><i class="fa-solid fa-clock"></i> ${item.time}</span>
                 </div>
                 <div>
@@ -309,7 +309,7 @@ function renderPriorityAlertsUI() {
                     <span style="font-size: 0.76rem; font-weight: 600; color: var(--text-secondary);">
                         Estado: <strong>${item.status}</strong>
                     </span>
-                    <button class="btn-action-sm" title="Confirmar / Atender alerta" onclick="toggleStatus(${item.id})">
+                    <button class="btn-action-sm" title="Confirmar / Atender alerta" onclick="toggleStatus('${escapeHTML(item.id)}')">
                         <i class="fa-solid fa-check"></i>
                     </button>
                 </div>
@@ -345,19 +345,19 @@ function renderHistoryTableUI() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
-                <span class="iso-timestamp">#${alert.id}</span>
-                <span class="iso-sub">${traceId}</span>
+                <span class="iso-timestamp">#${escapeHTML(alert.id)}</span>
+                <span class="iso-sub">${escapeHTML(traceId)}</span>
             </td>
             <td>
                 <span class="iso-timestamp">${isoString.replace('T', ' ').substring(0, 19)}</span>
                 <span class="iso-sub">${alert.time}</span>
             </td>
             <td>
-                <strong>${cleanTitle}</strong>
+                <strong>${escapeHTML(cleanTitle)}</strong>
                 ${renderChannelsHTML(alert.channels)}
             </td>
             <td>
-                <div>${alert.source}</div>
+                <div>${escapeHTML(alert.source)}</div>
                 <div style="margin-top: 4px;">${renderOriginBadgeHTML(alert.origin_type)}</div>
             </td>
             <td>
@@ -367,7 +367,7 @@ function renderHistoryTableUI() {
                 <span style="font-weight: 600;">${alert.status}</span>
             </td>
             <td>
-                <button class="btn-action-sm" title="Cambiar estado" onclick="toggleStatus(${alert.id})">
+                <button class="btn-action-sm" title="Cambiar estado" onclick="toggleStatus('${escapeHTML(alert.id)}')">
                     <i class="fa-solid fa-check"></i>
                 </button>
             </td>
@@ -376,36 +376,23 @@ function renderHistoryTableUI() {
     });
 }
 
-// Alternar estado de una alerta
-window.toggleStatus = function (id) {
-    alertsData = alertsData.map(alert => {
-        if (alert.id === id) {
-            if (alert.status === 'Pendiente') alert.status = 'Confirmado';
-            else if (alert.status === 'Confirmado') alert.status = 'Atendido';
-            else alert.status = 'Pendiente';
-        }
-        return alert;
-    });
-
-    localStorage.setItem('copahue_alerts_v2', JSON.stringify(alertsData));
-    updateKPIs();
-    renderPriorityAlertsUI();
-    renderHistoryTableUI();
+// Resolver en servidor: ya NO modificamos el estado solo en localStorage.
+window.toggleStatus = async function (id) {
+    const alerta = alertsData.find(a => a.id === String(id));
+    if (!alerta || alerta.status === 'Atendido') return;
+    if (!confirm(`¿Resolver la alerta ${id} en el backend y apagar la alarma asociada si corresponde?`)) return;
+    try {
+        await apiFetch(`/api/v1/alerts/${encodeURIComponent(id)}/resolve`, { method: 'POST' });
+        await refrescarAlertas();
+    } catch (e) {
+        console.error(e);
+        alert(`No se pudo resolver la alerta: ${e.message}`);
+    }
 };
 
-// Botón limpiar en historial.html
+// El backend no tiene endpoint para borrar el historial: recargar en lugar de borrar datos solo visuales.
 const btnClear = document.getElementById('btn-clear');
-if (btnClear) {
-    btnClear.addEventListener('click', () => {
-        if (confirm('¿Deseas restablecer las alertas iniciales?')) {
-            alertsData = [...ALERTAS_INICIALES];
-            localStorage.setItem('copahue_alerts_v2', JSON.stringify(alertsData));
-            updateKPIs();
-            renderPriorityAlertsUI();
-            renderHistoryTableUI();
-        }
-    });
-}
+if (btnClear) btnClear.addEventListener('click', refrescarAlertas);
 
 // Inicialización del Mapa Satelital de Copahue
 function initMapIfPresent() {
@@ -447,3 +434,5 @@ renderPriorityAlertsUI();
 updateKPIs();
 renderHistoryTableUI();
 initMapIfPresent();
+refrescarAlertas();
+setInterval(refrescarAlertas, 5000);
